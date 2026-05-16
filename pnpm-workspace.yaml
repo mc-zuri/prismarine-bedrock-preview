@@ -1,0 +1,7 @@
+allowBuilds:
+  canvas: true
+  raknet-native: true
+blockExoticSubdeps: false
+overrides:
+  minecraft-data: "github:mc-zuri/node-minecraft-data#bedrock-v2"
+  

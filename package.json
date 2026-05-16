@@ -1,0 +1,26 @@
+{
+  "name": "prismarine-bedrock-preview",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.1.2",
+      "onFail": "download"
+    }
+  },
+  "dependencies": {
+    "bedrock-test": "github:GenerelSchwerz/prismarine-bedrock",
+    "minecraft-data": "github:mc-zuri/node-minecraft-data#bedrock-v2",
+    "prismarine-chunk": "github:GenerelSchwerz/prismarine-chunk#bedrock-1.26-compat",
+    "prismarine-viewer": "github:mc-zuri/node-prismarine-viewer#bedrock",
+    "vec3": "^0.2.0"
+  }
+}
