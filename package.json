@@ -22,5 +22,11 @@
     "prismarine-chunk": "github:GenerelSchwerz/prismarine-chunk#bedrock-1.26-compat",
     "prismarine-viewer": "github:mc-zuri/node-prismarine-viewer#bedrock",
     "vec3": "^0.2.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "canvas",
+      "raknet-native"
+    ]
   }
 }
