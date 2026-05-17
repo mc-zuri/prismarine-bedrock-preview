@@ -18,9 +18,14 @@
   },
   "dependencies": {
     "bedrock-test": "github:GenerelSchwerz/prismarine-bedrock",
+    "compression": "^1.8.1",
+    "express": "^5.2.1",
     "minecraft-data": "github:mc-zuri/node-minecraft-data#bedrock-v2",
+    "prismarine-block": "^1.7.3",
     "prismarine-chunk": "github:GenerelSchwerz/prismarine-chunk#bedrock-1.26-compat",
-    "prismarine-viewer": "github:mc-zuri/node-prismarine-viewer#bedrock",
+    "prismarine-registry": "^1.12.0",
+    "prismarine-world": "^3.3.1",
+    "socket.io": "^4.8.3",
     "vec3": "^0.2.0"
   },
   "pnpm": {
