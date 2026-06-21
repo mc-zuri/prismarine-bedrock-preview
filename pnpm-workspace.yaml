@@ -2,10 +2,8 @@ allowBuilds:
   canvas: true
   raknet-native: true
 blockExoticSubdeps: false
+nodeLinker: hoisted
 overrides:
   minecraft-data: "github:mc-zuri/node-minecraft-data#bedrock-v2"
-  # bedrock-test declares `"prismarine-chunk": "link:./prismarine-chunk-fork"`
-  # in its package.json, which doesn't exist inside the github tarball install.
-  # Override transitively so the install resolves the same fork the preview
-  # uses directly.
-  prismarine-chunk: "github:GenerelSchwerz/prismarine-chunk#bedrock-1.26-compat"
+  prismarine-chunk: "github:mc-zuri/prismarine-chunk#bedrock"
+  prismarine-registry: "github:mc-zuri/prismarine-registry#bedrock"

@@ -448,16 +448,28 @@ class WorldView extends EventEmitter {
 // Main plugin
 // ============================================================================
 
-function setupRoutes(app, prefix = '') {
-  const compression = require('compression')
-  app.use(compression())
-  app.get('/', (req, res) => {
-    res.type('text/plain').send(
-      'Bot viewer running. Open the GH Pages client:\n' +
-      '  https://mc-zuri.github.io/node-prismarine-viewer/\n' +
-      '(defaults to http://localhost:3000; for a non-default host use ?server=' + encodeURIComponent('http://' + req.headers.host) + ')'
-    )
+// socket.io-shaped wrapper around a `ws` WebSocket so call sites that expect
+// `.on(evt, fn)` for inbound and `.emit(evt, data)` for outbound keep working.
+// Wire envelope: `{ event, data }` JSON per text frame.
+function socketShim(ws) {
+  const inbound = new EventEmitter()
+  ws.on('message', (data) => {
+    try {
+      const { event, data: payload } = JSON.parse(data.toString('utf8'))
+      inbound.emit(event, payload)
+    } catch (err) {
+      console.warn('[viewer] bad client frame:', err.message)
+    }
   })
+  ws.on('close', () => inbound.emit('disconnect'))
+  ws.on('error', (err) => console.warn('[viewer] ws error:', err.message))
+  return {
+    on: (e, fn) => inbound.on(e, fn),
+    emit: (e, data) => {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: e, data }))
+    },
+    disconnect: () => ws.close()
+  }
 }
 
 module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, prefix = '', javaVersion = '1.21.11', stickSensitivity = 1, pitchSensitivity = 0.5, maxCameraDistance = 30 }) => {
@@ -465,17 +477,25 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
     return this.toString()
   }
 
-  const express = require('express')
+  const http = require('http')
+  const { WebSocketServer } = require('ws')
 
-  const app = express()
-  const http = require('http').createServer(app)
-
-  const io = require('socket.io')(http, {
-    path: prefix + '/socket.io',
-    cors: { origin: '*' }
+  const httpServer = http.createServer((req, res) => {
+    const url = req.url || '/'
+    if (url === '/' || url.startsWith('/?')) {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end(
+        'Bot viewer running. Open the GH Pages client:\n' +
+        '  https://mc-zuri.github.io/node-prismarine-viewer/\n' +
+        '(defaults to http://localhost:3000; for a non-default host use ?server=' + encodeURIComponent('http://' + req.headers.host) + ')'
+      )
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' })
+      res.end('Not found')
+    }
   })
 
-  setupRoutes(app, prefix)
+  const wss = new WebSocketServer({ server: httpServer, path: prefix + '/socket.io' })
 
   const blockConverter = new BlockConverter(javaVersion, bot)
 
@@ -512,8 +532,16 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
     }
   }
 
+  // bot.self.position is the EYE position in prismarine-bedrock. The Java
+  // viewer protocol expects feet position, so subtract the entity's eye
+  // height (pose-dependent: 1.62 standing, 1.27 sneaking, etc.).
+  function feetPosition () {
+    const eye = bot.self.eyeHeight ?? 1.62
+    return new Vec3(bot.self.position.x, bot.self.position.y - eye, bot.self.position.z)
+  }
+
   bot.on('path_update', (r) => {
-    const path = [bot.self.position.offset(0, 0.5, 0)]
+    const path = [feetPosition().offset(0, 0.5, 0)]
     for (const node of r.path) {
       path.push(new Vec3(node.x, node.y + 0.5, node.z))
     }
@@ -528,13 +556,15 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
     bot.viewer.erase('path')
   })
 
-  io.on('connection', (socket) => {
+  wss.on('connection', (ws) => {
+    const socket = socketShim(ws)
     socket.emit('version', blockConverter.javaVersion)
     socket.emit('config', { stickSensitivity, pitchSensitivity, firstPerson, maxCameraDistance })
     sockets.push(socket)
 
-    const worldView = new WorldView(bot.world, blockConverter, viewDistance, bot.self.position, socket)
-    worldView.init(bot.self.position)
+    const initialFeet = feetPosition()
+    const worldView = new WorldView(bot.world, blockConverter, viewDistance, initialFeet, socket)
+    worldView.init(initialFeet)
 
     worldView.on('blockClicked', (block, face, button) => {
       bot.viewer.emit('blockClicked', block, face, button)
@@ -558,8 +588,9 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
       yaw = bot.self.yaw;
       pitch = bot.self.pitch;
 
+      const feet = feetPosition()
       const packet = {
-        pos: bot.self.position,
+        pos: feet,
         yaw: Math.PI - (bot.self.yaw ?? 180) * Math.PI / 180,
         addMesh: true,
         pitch: undefined
@@ -568,11 +599,12 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
         packet.pitch = -(bot.self.pitch ?? 0) * Math.PI / 180
       }
       socket.emit('position', packet)
-      worldView.updatePosition(bot.self.position)
+      worldView.updatePosition(feet)
       pos.set(bot.self.position.x, bot.self.position.y, bot.self.position.z)
     }
 
     bot.on('move', botPosition)
+      setInterval(()=>botPosition(), 50)
     worldView.listenToBot(bot)
     socket.on('disconnect', () => {
       bot.removeListener('move', botPosition)
@@ -581,7 +613,9 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
     })
   })
 
-  http.listen(port, () => {
+
+
+  httpServer.listen(port, () => {
     console.log(`Prismarine viewer web server running on *:${port}`)
     const os = require('os')
     const ips = ['127.0.0.1']
@@ -597,7 +631,7 @@ module.exports = (bot, { viewDistance = 6, firstPerson = false, port = 3000, pre
   })
 
   bot.viewer.close = () => {
-    http.close()
+    httpServer.close()
     for (const socket of sockets) {
       socket.disconnect()
     }
