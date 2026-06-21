@@ -3,9 +3,12 @@ const { BotState, bedrockVersionFromEnv } = require('bedrock-test')
 const Vec3 = require('vec3').Vec3
 const prismarineBedrock = require('./viewer-server');
 
+// CLI args: `pnpm run start <host> <port>` (both optional)
+const [argHost, argPort] = process.argv.slice(2)
+
 const options = {
-  host: 'localhost',
-  port: 19132,
+  host: argHost || 'localhost',
+  port: argPort ? Number(argPort) : 19132,
   username: 'MyBot',
   offline: true,
   version: bedrockVersionFromEnv()
